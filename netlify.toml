@@ -1,0 +1,9 @@
+[[redirects]]
+  from = "/google53d8a3b919b0352b.html"
+  to = "/google53d8a3b919b0352b.html"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

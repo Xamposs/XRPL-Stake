@@ -1,0 +1,18 @@
+{
+  "rTESTUSERADDRESS123": [
+    {
+      "id": "dummy-stake-001",
+      "txHash": "DUMMYTXHASH001",
+      "poolId": "pool1",
+      "poolName": "60-Day Lock",
+      "amount": 10,
+      "lockPeriod": 60,
+      "startDate": "2024-06-01T12:00:00.000Z",
+      "endDate": "2024-07-31T12:00:00.000Z",
+      "status": "active",
+      "apy": 10.4,
+      "userAddress": "rTESTUSERADDRESS123",
+      "payloadUuid": "dummy-payload-uuid-001"
+    }
+  ]
+}
