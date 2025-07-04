@@ -17,8 +17,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
-  'https://wondrous-zuccutto-af30a2.netlify.app',
-  'https://flarexfi.xyz',
+  'https://xrpl-stake.netlify.app/',
   'http://localhost:3000'
 ];
 app.use(cors({
