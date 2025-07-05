@@ -57,7 +57,7 @@ export const getAvailableWalletProviders = () => {
 const XAMAN_OAUTH_CONFIG = {
   clientId: import.meta.env.VITE_XAMAN_API_KEY,
   clientSecret: import.meta.env.VITE_XAMAN_API_SECRET,
-  redirectUri: window.location.origin + '/#/auth/callback', // Using hash routing for Vite compatibility
+  redirectUri: import.meta.env.VITE_XAMAN_REDIRECT_URI || window.location.origin + '/#/auth/callback', // Use env variable first
   authEndpoint: 'https://oauth2.xumm.app/auth',
   tokenEndpoint: 'https://oauth2.xumm.app/token',
   userInfoEndpoint: 'https://oauth2.xumm.app/userinfo',
