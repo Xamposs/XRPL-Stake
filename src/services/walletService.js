@@ -96,6 +96,7 @@ const getStoredTokens = () => {
 const clearOAuthData = () => {
   localStorage.removeItem('xaman_oauth_state');
   localStorage.removeItem('xaman_tokens');
+  clearPKCEVerifier(); // Add PKCE cleanup
 };
 
 // Check if an access token is expired
@@ -179,66 +180,41 @@ const getXamanUserInfo = async (accessToken) => {
   }
 };
 
-// Initiate Xaman OAuth login
-// Add crypto functions for PKCE
-const generateCodeVerifier = () => {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode.apply(null, array))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-};
-
-const generateCodeChallenge = async (codeVerifier) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(codeVerifier);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-};
-
-// Store PKCE verifier
-const storePKCEVerifier = (verifier) => {
-  localStorage.setItem('xaman_code_verifier', verifier);
-};
-
-const getPKCEVerifier = () => {
-  return localStorage.getItem('xaman_code_verifier');
-};
-
-// Update the initiateXamanOAuth function
+// Initiate Xaman OAuth login with PKCE
 const initiateXamanOAuth = async () => {
-  // Generate PKCE parameters
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  
-  // Store code verifier for later use
-  storePKCEVerifier(codeVerifier);
-  
-  // Generate and store state parameter
-  const state = generateState();
-  storeOAuthState(state);
+  try {
+    // Generate PKCE parameters
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    // Store code verifier for later use
+    storePKCEVerifier(codeVerifier);
+    
+    // Generate and store state parameter
+    const state = generateState();
+    storeOAuthState(state);
 
-  // Build authorization URL with PKCE
-  const authUrl = new URL(XAMAN_OAUTH_CONFIG.authEndpoint);
-  authUrl.searchParams.append('client_id', XAMAN_OAUTH_CONFIG.clientId);
-  authUrl.searchParams.append('redirect_uri', XAMAN_OAUTH_CONFIG.redirectUri);
-  authUrl.searchParams.append('response_type', XAMAN_OAUTH_CONFIG.responseType);
-  authUrl.searchParams.append('scope', XAMAN_OAUTH_CONFIG.scope);
-  authUrl.searchParams.append('state', state);
-  authUrl.searchParams.append('code_challenge', codeChallenge);
-  authUrl.searchParams.append('code_challenge_method', 'S256');
+    // Build authorization URL with PKCE
+    const authUrl = new URL(XAMAN_OAUTH_CONFIG.authEndpoint);
+    authUrl.searchParams.append('client_id', XAMAN_OAUTH_CONFIG.clientId);
+    authUrl.searchParams.append('redirect_uri', XAMAN_OAUTH_CONFIG.redirectUri);
+    authUrl.searchParams.append('response_type', XAMAN_OAUTH_CONFIG.responseType);
+    authUrl.searchParams.append('scope', XAMAN_OAUTH_CONFIG.scope);
+    authUrl.searchParams.append('state', state);
+    authUrl.searchParams.append('code_challenge', codeChallenge);
+    authUrl.searchParams.append('code_challenge_method', 'S256');
 
-  // Redirect to Xaman authorization
-  window.location.href = authUrl.toString();
+    // Redirect to Xaman authorization
+    window.location.href = authUrl.toString();
+  } catch (error) {
+    console.error('Error initiating Xaman OAuth:', error);
+    clearPKCEVerifier();
+    throw error;
+  }
 };
 
 
 // Handle OAuth callback
-// Update the handleXamanCallback function
 export const handleXamanCallback = async (code, state) => {
   try {
     // Verify state parameter
@@ -263,18 +239,21 @@ export const handleXamanCallback = async (code, state) => {
         client_id: XAMAN_OAUTH_CONFIG.clientId,
         code: code,
         redirect_uri: XAMAN_OAUTH_CONFIG.redirectUri,
-        code_verifier: codeVerifier, // Add PKCE verifier
+        code_verifier: codeVerifier, // PKCE verifier instead of client_secret
       }),
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Token exchange failed:', errorText);
       throw new Error('Failed to exchange code for tokens');
     }
 
     const tokenData = await response.json();
 
-    // Clean up PKCE verifier
-    localStorage.removeItem('xaman_code_verifier');
+    // Clean up PKCE verifier and OAuth state
+    clearPKCEVerifier();
+    clearOAuthData();
 
     // Store tokens with expiry time
     const expiresAt = Date.now() + (tokenData.expires_in * 1000);
@@ -307,7 +286,7 @@ export const handleXamanCallback = async (code, state) => {
     return walletData;
   } catch (error) {
     console.error('Error handling Xaman callback:', error);
-    localStorage.removeItem('xaman_code_verifier'); // Clean up on error
+    clearPKCEVerifier();
     clearOAuthData();
     throw error;
   }
