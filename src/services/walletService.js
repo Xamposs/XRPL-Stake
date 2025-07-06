@@ -99,6 +99,38 @@ const clearOAuthData = () => {
   clearPKCEVerifier(); // Add PKCE cleanup
 };
 
+// PKCE Helper Functions
+const generateCodeVerifier = () => {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode.apply(null, array))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+};
+
+const generateCodeChallenge = async (codeVerifier) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(codeVerifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+};
+
+const storePKCEVerifier = (codeVerifier) => {
+  localStorage.setItem('xaman_pkce_verifier', codeVerifier);
+};
+
+const getPKCEVerifier = () => {
+  return localStorage.getItem('xaman_pkce_verifier');
+};
+
+const clearPKCEVerifier = () => {
+  localStorage.removeItem('xaman_pkce_verifier');
+};
+
 // Check if an access token is expired
 const isTokenExpired = (expiresAt) => {
   if (!expiresAt) return true;
