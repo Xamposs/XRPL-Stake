@@ -16,22 +16,24 @@ dotenv.config();
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
-const allowedOrigins = [
-  'https://xrpl-stake.netlify.app/',
-  'http://localhost:3000'
-];
+
+// CORS Configuration - UPDATED
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`Blocked by CORS: ${origin}`);
-      callback(new Error(`Not allowed by CORS: ${origin}`));
-    }
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: [
+    'https://xrpl-stake.netlify.app',  // Remove trailing slash
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  credentials: true
 }));
+
+// Remove or comment out this duplicate CORS:
+// app.use(cors({
+//   origin: process.env.FRONTEND_URL || 'http://FlareXfi.xyz',
+//   methods: ['GET', 'POST', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization']
+// }));
 
 // The staking contract address
 const STAKING_ADDRESS = 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF';
@@ -609,11 +611,6 @@ function updateAllRewards() {
 }
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://FlareXfi.xyz',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 app.use(bodyParser.json());
 
 // Check if API credentials and XRPL details are set

@@ -392,38 +392,30 @@ export const createStake = async (userAddress, poolId, amount) => {
         // Create a unique ID for this stake
         const stakeId = `stake_${Date.now()}_${Math.random().toString(16).substring(2, 6)}`;
 
-        // Create a memo with staking details - similar to the perpetuals DEX format
-        const startDate = new Date();
-        const endDate = new Date(startDate.getTime() + pool.lockPeriodDays * 24 * 60 * 60 * 1000);
-
+        // Create a simpler memo
         const memo = {
-          action: 'open_position',
-          positionId: stakeId,
-          poolId: poolId,
-          poolName: pool.name,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
+          action: 'stake',
+          pool: poolId,
           amount: amount,
-          rewardRate: pool.rewardRate,
-          lockPeriodDays: pool.lockPeriodDays,
-          timestamp: Date.now(),
-          version: 'v1',
-          type: 'XrpFlrStaking' // Add explicit type to make it easier to identify
+          days: pool.lockPeriodDays,
+          rate: pool.rewardRate
         };
-
-
-
+        
+        // Fix the memo hex conversion
+        const memoHex = stringToHex(JSON.stringify(memo));
+        
         // Create the transaction payload
         const payload = {
           txjson: {
             TransactionType: 'Payment',
-            Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF', // Staking wallet address
-            Amount: `${Math.floor(amount * 1000000)}`, // Convert to drops (1 XRP = 1,000,000 drops)
+            Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF',
+            Amount: `${Math.floor(amount * 1000000)}`,
             Memos: [
               {
                 Memo: {
-                  MemoType: Buffer.from('XrpFlrStaking').toString('hex').toUpperCase(),
-                  MemoData: memoHex
+                  MemoType: stringToHex('XrpFlrStaking'),
+                  MemoData: memoHex,
+                  MemoFormat: stringToHex('application/json')
                 }
               }
             ]
@@ -494,23 +486,13 @@ export const createStake = async (userAddress, poolId, amount) => {
       // Create a unique ID for this stake
       const stakeId = `stake_${Date.now()}_${Math.random().toString(16).substring(2, 6)}`;
 
-      // Create a memo with staking details - similar to the perpetuals DEX format
-      const startDate = new Date();
-      const endDate = new Date(startDate.getTime() + pool.lockPeriodDays * 24 * 60 * 60 * 1000);
-
+      // Create a simpler memo
       const memo = {
-        action: 'open_position',
-        positionId: stakeId,
-        poolId: poolId,
-        poolName: pool.name,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        action: 'stake',
+        pool: poolId,
         amount: amount,
-        rewardRate: pool.rewardRate,
-        lockPeriodDays: pool.lockPeriodDays,
-        timestamp: Date.now(),
-        version: 'v1',
-        type: 'XrpFlrStaking' // Add explicit type to make it easier to identify
+        days: pool.lockPeriodDays,
+        rate: pool.rewardRate
       };
 
       // Create a transaction payload
@@ -521,16 +503,6 @@ export const createStake = async (userAddress, poolId, amount) => {
         Memos: [
           {
             Memo: {
-              // Replace line 423 (around line 423):
-              // OLD: MemoType: Buffer.from('XrpFlrStaking').toString('hex').toUpperCase(),
-              // NEW:
-              MemoType: stringToHex('XrpFlrStaking'),
-              
-              // Replace line 508 (around line 508):
-              // OLD: MemoType: Buffer.from('XrpFlrStaking').toString('hex').toUpperCase(),
-              //      MemoData: Buffer.from(JSON.stringify(memo)).toString('hex').toUpperCase(),
-              //      MemoFormat: Buffer.from('application/json').toString('hex').toUpperCase()
-              // NEW:
               MemoType: stringToHex('XrpFlrStaking'),
               MemoData: stringToHex(JSON.stringify(memo)),
               MemoFormat: stringToHex('application/json')
@@ -825,14 +797,12 @@ const unstakeWithAmount = async (userAddress, stakeId, amount) => {
       // If backend fails, create a direct URL to Xumm for unstaking
       console.log('Backend failed, creating direct Xumm URL for unstaking');
 
-      // Create a memo with unstaking details
-      const memo = {
-        action: 'close_position',
-        positionId: stakeId,
-        amount: parseFloat(amount),
-        timestamp: Date.now(),
-        version: 'v1'
-      };
+      // Create a simpler memo for unstaking
+        const memo = {
+          action: 'unstake',
+          stake: stakeId,
+          amount: parseFloat(amount)
+        };
 
       // Create a transaction payload
       const txJson = {
