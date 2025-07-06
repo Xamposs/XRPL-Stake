@@ -20,5 +20,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['buffer']
+  },
+  build: {
+    target: 'es2022' // This supports top-level await
   }
 })
