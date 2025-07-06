@@ -480,69 +480,70 @@ export const createStake = async (userAddress, poolId, amount) => {
     } catch (error) {
       console.error('Error connecting to backend server:', error);
 
-      // If backend fails, create a direct URL to Xumm
-      console.log('Backend failed, creating direct Xumm URL');
+      // If backend fails, use Xaman SDK directly (no manual URL creation)
+      console.log('Backend failed, using Xaman SDK directly');
 
-      // Create a unique ID for this stake
-      const stakeId = `stake_${Date.now()}_${Math.random().toString(16).substring(2, 6)}`;
+      if (!window.xummSdk) {
+        throw new Error('Xaman SDK not available and backend failed');
+      }
 
-      // Create a much simpler memo to reduce payload size
-      const memo = `${poolId}:${amount}:${pool.lockPeriodDays}`;
-      
-      // Fix the memo hex conversion
-      const memoHex = stringToHex(memo);
-      
-      // Create the transaction payload
-      const payload = {
-        txjson: {
-          TransactionType: 'Payment',
-          Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF',
-          Amount: `${Math.floor(amount * 1000000)}`,
-          Memos: [
-            {
-              Memo: {
-                MemoType: stringToHex('stake'),
-                MemoData: memoHex,
-                MemoFormat: stringToHex('text/plain')
+      try {
+        // Create a unique ID for this stake
+        const stakeId = `stake_${Date.now()}_${Math.random().toString(16).substring(2, 6)}`;
+
+        // Create a much simpler memo to reduce payload size
+        const memo = `${poolId}:${amount}:${pool.lockPeriodDays}`;
+        
+        // Create the transaction payload using SDK
+        const payload = {
+          txjson: {
+            TransactionType: 'Payment',
+            Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF',
+            Amount: `${Math.floor(amount * 1000000)}`,
+            Memos: [
+              {
+                Memo: {
+                  MemoType: stringToHex('stake'),
+                  MemoData: stringToHex(memo),
+                  MemoFormat: stringToHex('text/plain')
+                }
               }
-            }
-          ]
+            ]
+          }
+        };
+
+        console.log('Creating payload with Xaman SDK:', payload);
+
+        // Create the payload with Xaman SDK
+        const response = await window.xummSdk.payload.create(payload);
+        console.log('Xaman SDK response:', response);
+
+        if (response && response.uuid) {
+          // Create a stake record but don't add it to active stakes yet
+          const newStake = {
+            id: stakeId,
+            userId: 'user1',
+            poolId,
+            amount,
+            lockPeriod: pool.lockPeriodDays,
+            startDate: new Date().toISOString(),
+            endDate: new Date(Date.now() + pool.lockPeriodDays * 24 * 60 * 60 * 1000).toISOString(),
+            status: 'pending',
+            apy: pool.rewardRate,
+            txId: response.uuid
+          };
+
+          // Add to pending stakes
+          addPendingStake(response.uuid, newStake);
+
+          return response;
+        } else {
+          throw new Error('Failed to create Xaman payload');
         }
-      };
-
-      // URL encode the transaction JSON
-      const txJsonStr = JSON.stringify(payload.txjson);
-      const encodedTx = encodeURIComponent(txJsonStr);
-
-      // Create the Xumm URL
-      const xummUrl = `https://xumm.app/sign?tx=${encodedTx}`;
-
-      // Create a mock payload response
-      const mockPayload = {
-        uuid: stakeId,
-        next: {
-          always: xummUrl
-        }
-      };
-
-      // Create a stake record but don't add it to active stakes yet
-      const newStake = {
-        id: stakeId,
-        userId: 'user1',
-        poolId,
-        amount,
-        lockPeriod: pool.lockPeriodDays,
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + pool.lockPeriodDays * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'pending', // Mark as pending until confirmed
-        apy: pool.rewardRate,
-        txId: stakeId
-      };
-
-      // Add to pending stakes
-      addPendingStake(stakeId, newStake);
-
-      return mockPayload;
+      } catch (sdkError) {
+        console.error('Error using Xaman SDK:', sdkError);
+        throw new Error('Both backend and Xaman SDK failed. Please try again later.');
+      }
     }
 
     if (!response.ok) {
