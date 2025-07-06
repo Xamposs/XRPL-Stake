@@ -1,52 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { handleXamanCallback } from '../../services/walletService';
 import { useWallet } from '../../hooks/useWallet';
 import { useXumm } from '../../context/XummContext';
 import './auth.css';
 
 const XamanCallback = () => {
-  const [status, setStatus] = useState('processing'); // processing, success, error
+  const [status, setStatus] = useState('processing');
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const { connectXRPWallet } = useWallet();
+  const { connect } = useXumm();
 
   useEffect(() => {
     const processCallback = async () => {
       try {
-        // For hash router, the params might be after the hash or in the search
-        const hashParams = window.location.hash.includes('?') 
-          ? new URLSearchParams(window.location.hash.split('?')[1])
-          : new URLSearchParams('');
-        const searchParams = new URLSearchParams(window.location.search);
+        // With simplified SDK approach, we don't need OAuth callback processing
+        // Just check if user is already connected or try to connect
         
-        // Try to get code and state from either location
-        const code = hashParams.get('code') || searchParams.get('code');
-        const state = hashParams.get('state') || searchParams.get('state');
-
-        if (!code || !state) {
-          setStatus('error');
-          setError('Missing required parameters from Xaman.');
-          return;
-        }
-
-        // Process the OAuth callback
-        const walletData = await handleXamanCallback(code, state);
+        // Try to connect using the simplified method
+        await connect();
         
-        if (walletData && walletData.address) {
-          // Update wallet context
-          await connectXRPWallet(walletData);
-          
-          setStatus('success');
-          
-          // Navigate back to home after a short delay
-          setTimeout(() => {
-            navigate('/');
-          }, 2000);
-        } else {
-          setStatus('error');
-          setError('Failed to connect Xaman wallet.');
-        }
+        setStatus('success');
+        
+        // Navigate back to home after a short delay
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
+        
       } catch (err) {
         console.error('Error in Xaman callback:', err);
         setStatus('error');
@@ -55,7 +35,7 @@ const XamanCallback = () => {
     };
 
     processCallback();
-  }, [navigate, connectXRPWallet]);
+  }, [navigate, connect]);
 
   return (
     <div className="xaman-callback">
