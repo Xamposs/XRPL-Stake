@@ -356,11 +356,15 @@ export const estimateReward = async (amount, rewardRate, days) => {
   });
 };
 
+// Initialize Xaman SDK for browser use (no API secret)
 try {
-  window.xummSdk = new XummSdk(
-    import.meta.env.VITE_XAMAN_API_KEY,
-    import.meta.env.VITE_XAMAN_API_SECRET
-  );
+  if (!window.xummSdk) {
+    const { XummSdk } = await import('xumm-sdk');
+    window.xummSdk = new XummSdk(
+      import.meta.env.VITE_XAMAN_API_KEY
+      // No API secret for browser usage
+    );
+  }
 } catch (error) {
   console.error('Error initializing Xumm SDK:', error);
   window.xummSdk = null;

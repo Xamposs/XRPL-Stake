@@ -1,9 +1,9 @@
 import { XummSdk } from 'xumm-sdk';
 
-// Initialize the Xumm SDK with your API key
+// Initialize the Xumm SDK with ONLY the API key (no secret for browser)
 const sdk = new XummSdk(
-  import.meta.env.VITE_XAMAN_API_KEY,
-  import.meta.env.VITE_XAMAN_API_SECRET
+  import.meta.env.VITE_XAMAN_API_KEY
+  // DO NOT include the API secret in browser code
 );
 
 // Wallet providers
