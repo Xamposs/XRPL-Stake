@@ -511,7 +511,7 @@ export const createStake = async (userAddress, poolId, amount) => {
       };
 
       // URL encode the transaction JSON
-      const txJsonStr = JSON.stringify(txJson);
+      const txJsonStr = JSON.stringify(payload.txjson);
       const encodedTx = encodeURIComponent(txJsonStr);
 
       // Create the Xumm URL
