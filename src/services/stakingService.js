@@ -486,29 +486,28 @@ export const createStake = async (userAddress, poolId, amount) => {
       // Create a unique ID for this stake
       const stakeId = `stake_${Date.now()}_${Math.random().toString(16).substring(2, 6)}`;
 
-      // Create a simpler memo
-      const memo = {
-        action: 'stake',
-        pool: poolId,
-        amount: amount,
-        days: pool.lockPeriodDays,
-        rate: pool.rewardRate
-      };
-
-      // Create a transaction payload
-      const txJson = {
-        TransactionType: 'Payment',
-        Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF', // Staking wallet address
-        Amount: `${Math.floor(amount * 1000000)}`, // Convert to drops (1 XRP = 1,000,000 drops)
-        Memos: [
-          {
-            Memo: {
-              MemoType: stringToHex('XrpFlrStaking'),
-              MemoData: stringToHex(JSON.stringify(memo)),
-              MemoFormat: stringToHex('application/json')
+      // Create a much simpler memo to reduce payload size
+      const memo = `${poolId}:${amount}:${pool.lockPeriodDays}`;
+      
+      // Fix the memo hex conversion
+      const memoHex = stringToHex(memo);
+      
+      // Create the transaction payload
+      const payload = {
+        txjson: {
+          TransactionType: 'Payment',
+          Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF',
+          Amount: `${Math.floor(amount * 1000000)}`,
+          Memos: [
+            {
+              Memo: {
+                MemoType: stringToHex('stake'),
+                MemoData: memoHex,
+                MemoFormat: stringToHex('text/plain')
+              }
             }
-          }
-        ]
+          ]
+        }
       };
 
       // URL encode the transaction JSON
