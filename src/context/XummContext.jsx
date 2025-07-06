@@ -3,8 +3,7 @@ import {
   connectXRPWallet, 
   disconnectWallet,
   getWalletBalance, 
-  getConnectedWallet,
-  checkXamanOAuthCallback
+  getConnectedWallet
 } from '../services/walletService';
 
 // Create a context for Xaman/XUMM wallet interactions
@@ -20,19 +19,6 @@ export const XummProvider = ({ children }) => {
   useEffect(() => {
     const checkExistingConnection = async () => {
       try {
-        // Check for callback in URL (for OAuth redirect)
-        const callbackData = await checkXamanOAuthCallback();
-        if (callbackData) {
-          setState({
-            account: callbackData.address,
-            balance: callbackData.balance,
-            provider: callbackData.provider,
-            lastConnected: callbackData.lastConnected
-          });
-          setLoading(false);
-          return;
-        }
-        
         // Check for existing wallet connection
         const connectedWallet = getConnectedWallet('xrp');
         if (connectedWallet && connectedWallet.address) {
@@ -61,11 +47,6 @@ export const XummProvider = ({ children }) => {
       setError(null);
       
       const walletData = await connectXRPWallet('xaman');
-      
-      // If we're being redirected to OAuth, don't update state yet
-      if (walletData && walletData.pendingOAuth) {
-        return;
-      }
       
       if (walletData && walletData.address) {
         setState({
