@@ -521,9 +521,19 @@ export const createStake = async (userAddress, poolId, amount) => {
         Memos: [
           {
             Memo: {
-              MemoType: Buffer.from('XrpFlrStaking').toString('hex').toUpperCase(),
-              MemoData: Buffer.from(JSON.stringify(memo)).toString('hex').toUpperCase(),
-              MemoFormat: Buffer.from('application/json').toString('hex').toUpperCase()
+              // Replace line 423 (around line 423):
+              // OLD: MemoType: Buffer.from('XrpFlrStaking').toString('hex').toUpperCase(),
+              // NEW:
+              MemoType: stringToHex('XrpFlrStaking'),
+              
+              // Replace line 508 (around line 508):
+              // OLD: MemoType: Buffer.from('XrpFlrStaking').toString('hex').toUpperCase(),
+              //      MemoData: Buffer.from(JSON.stringify(memo)).toString('hex').toUpperCase(),
+              //      MemoFormat: Buffer.from('application/json').toString('hex').toUpperCase()
+              // NEW:
+              MemoType: stringToHex('XrpFlrStaking'),
+              MemoData: stringToHex(JSON.stringify(memo)),
+              MemoFormat: stringToHex('application/json')
             }
           }
         ]
