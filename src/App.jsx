@@ -8,11 +8,13 @@ import Dashboard from './components/Dashboard/Dashboard';
 import StakingPanel from './components/Staking/StakingPanel';
 import RewardsPanel from './components/Rewards/RewardsPanel';
 import Documentation from './components/Documentation/Documentation';
-import XamanCallback from './components/Auth/XamanCallback';
+// Remove XamanCallback import since OAuth is no longer used
+// import XamanCallback from './components/Auth/XamanCallback';
 import { WalletProvider } from './context/WalletContext';
 import { StakingProvider } from './context/StakingContext';
 import { XummProvider } from './context/XummContext';
-import { checkXamanOAuthCallback } from './services/walletService';
+// Remove checkXamanOAuthCallback import since OAuth is no longer used
+// import { checkXamanOAuthCallback } from './services/walletService';
 import { initStorage } from './services/storageService';
 import favicon from './assets/images/favicon.ico';
 import './styles/BackgroundEffect.css';
@@ -64,19 +66,19 @@ function App() {
     }
   }, []);
 
-  // Handle Xaman OAuth
-  useEffect(() => {
-    (async () => {
-      try {
-        const walletData = await checkXamanOAuthCallback();
-        if (walletData) {
-          console.log('Xaman wallet connected:', walletData);
-        }
-      } catch (err) {
-        console.error('Xaman OAuth error:', err);
-      }
-    })();
-  }, []);
+  // Remove Xaman OAuth useEffect since OAuth is no longer used
+  // useEffect(() => {
+  //   (async () => {
+  //     try {
+  //       const walletData = await checkXamanOAuthCallback();
+  //       if (walletData) {
+  //         console.log('Xaman wallet connected:', walletData);
+  //       }
+  //     } catch (err) {
+  //       console.error('Xaman OAuth error:', err);
+  //     }
+  //   })();
+  // }, []);
 
   // Handle hash-based nav
   useEffect(() => {
@@ -118,7 +120,8 @@ function App() {
         <WalletProvider>
           <StakingProvider>
             <Routes>
-              <Route path="/auth/callback" element={<XamanCallback />} />
+              {/* Remove OAuth callback route since OAuth is no longer used */}
+              {/* <Route path="/auth/callback" element={<XamanCallback />} /> */}
               <Route path="/" element={<AppLayout />} />
               <Route path="/stake" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
