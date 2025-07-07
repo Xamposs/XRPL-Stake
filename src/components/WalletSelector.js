@@ -5,7 +5,8 @@ import {
   getWalletProviders,
   getConnectedWallet,
   disconnectWallet,
-  isWalletAvailable
+  isWalletAvailable,
+  connectToXamanWithAddress
 } from '../services/walletService';
 
 const WalletSelector = ({ type = 'xrp', onConnect, onDisconnect }) => {
@@ -15,6 +16,8 @@ const WalletSelector = ({ type = 'xrp', onConnect, onDisconnect }) => {
   const [connectedWallet, setConnectedWallet] = useState(null);
   const [walletAvailable, setWalletAvailable] = useState(false);
   const [pendingOAuth, setPendingOAuth] = useState(false);
+  const [showAddressInput, setShowAddressInput] = useState(false);
+  const [addressInput, setAddressInput] = useState('');
   
   useEffect(() => {
     // Set preferred wallet provider based on type
@@ -56,10 +59,43 @@ const WalletSelector = ({ type = 'xrp', onConnect, onDisconnect }) => {
       if (onConnect) onConnect(wallet);
     } catch (err) {
       console.error('Wallet connection error:', err);
-      setError(err.message || 'Failed to connect wallet');
+      if (err.message === 'NEED_ADDRESS_INPUT') {
+        setShowAddressInput(true);
+      } else {
+        setError(err.message || 'Failed to connect wallet');
+      }
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const handleAddressSubmit = async () => {
+    if (!addressInput.trim()) {
+      setError('Please enter a valid XRP address');
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      const wallet = await connectToXamanWithAddress(addressInput.trim());
+      setConnectedWallet(wallet);
+      setShowAddressInput(false);
+      setAddressInput('');
+      if (onConnect) onConnect(wallet);
+    } catch (err) {
+      console.error('Address connection error:', err);
+      setError(err.message || 'Failed to connect with provided address');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleCancelAddressInput = () => {
+    setShowAddressInput(false);
+    setAddressInput('');
+    setError(null);
   };
   
   const handleDisconnect = async () => {
@@ -79,7 +115,39 @@ const WalletSelector = ({ type = 'xrp', onConnect, onDisconnect }) => {
   
   return (
     <div className="wallet-selector">
-      {pendingOAuth && type === 'xrp' ? (
+      {showAddressInput ? (
+        <div className="address-input-modal">
+          <div className="modal-content">
+            <h3>Enter Your XRP Address</h3>
+            <p>Please enter your XRP address from your Xaman wallet:</p>
+            <input
+              type="text"
+              value={addressInput}
+              onChange={(e) => setAddressInput(e.target.value)}
+              placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+              className="address-input"
+              disabled={isConnecting}
+            />
+            {error && <p className="error-message">{error}</p>}
+            <div className="modal-buttons">
+              <button
+                onClick={handleAddressSubmit}
+                disabled={isConnecting || !addressInput.trim()}
+                className="wallet-connect-button"
+              >
+                {isConnecting ? 'Connecting...' : 'Connect'}
+              </button>
+              <button
+                onClick={handleCancelAddressInput}
+                disabled={isConnecting}
+                className="wallet-connect-button secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : pendingOAuth && type === 'xrp' ? (
         <div className="oauth-pending">
           <h3>Redirecting to Xaman...</h3>
           <p>Please wait while you are redirected to sign in with Xaman.</p>

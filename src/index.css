@@ -23,3 +23,81 @@
 ::-webkit-scrollbar-corner {
   display: none;
 }
+
+/* Modal styles for XRP address input */
+.address-input-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.address-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin: 1rem 0;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.modal-buttons button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.wallet-connect-button {
+  background: #3b82f6;
+  color: white;
+}
+
+.wallet-connect-button:hover {
+  background: #2563eb;
+}
+
+.wallet-connect-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.wallet-connect-button.secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.wallet-connect-button.secondary:hover {
+  background: #4b5563;
+}
+
+.error-message {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}

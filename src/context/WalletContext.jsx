@@ -2,7 +2,8 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 import {
   connectXRPWallet,
   connectFlareWallet,
-  checkWalletConnection
+  checkWalletConnection,
+  connectToXamanWithAddress
 } from '../services/walletService';
 
 // Create the wallet context
@@ -14,6 +15,8 @@ export const WalletProvider = ({ children }) => {
   const [flareWallet, setFlareWallet] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
+  const [showAddressInput, setShowAddressInput] = useState(false);
+  const [addressInputError, setAddressInputError] = useState(null);
 
   // Check if wallets are already connected (e.g., from localStorage)
   useEffect(() => {
@@ -74,10 +77,39 @@ export const WalletProvider = ({ children }) => {
       console.log('XRP wallet saved to localStorage');
     } catch (err) {
       console.error('Error connecting XRP wallet:', err);
-      setError(err.message || 'Failed to connect XRP wallet');
+      if (err.message === 'NEED_ADDRESS_INPUT') {
+        setShowAddressInput(true);
+      } else {
+        setError(err.message || 'Failed to connect XRP wallet');
+      }
     } finally {
       setIsConnecting(false);
     }
+  }, []);
+
+  // Handle manual address input
+  const handleAddressInput = useCallback(async (address) => {
+    setAddressInputError(null);
+    setIsConnecting(true);
+
+    try {
+      const walletData = await connectToXamanWithAddress(address);
+      console.log('XRP wallet connected with address:', walletData);
+      setXrpWallet(walletData);
+      localStorage.setItem('xrpWallet', JSON.stringify(walletData));
+      setShowAddressInput(false);
+    } catch (err) {
+      console.error('Error connecting with address:', err);
+      setAddressInputError(err.message || 'Failed to connect with provided address');
+    } finally {
+      setIsConnecting(false);
+    }
+  }, []);
+
+  // Cancel address input
+  const handleCancelAddressInput = useCallback(() => {
+    setShowAddressInput(false);
+    setAddressInputError(null);
   }, []);
 
   // Connect Flare wallet
@@ -114,9 +146,13 @@ export const WalletProvider = ({ children }) => {
     flareWallet,
     isConnecting,
     error,
+    showAddressInput,
+    addressInputError,
     connectXRPWallet: handleConnectXRPWallet,
     connectFlareWallet: handleConnectFlareWallet,
-    disconnectWallet: handleDisconnectWallet
+    disconnectWallet: handleDisconnectWallet,
+    handleAddressInput,
+    handleCancelAddressInput
   };
 
   return (
