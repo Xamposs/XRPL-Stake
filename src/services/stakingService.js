@@ -3,7 +3,7 @@
 
 // Keep only:
 import { API_CONFIG } from '../config/api.js';
-import { xummSdk } from './walletService.js'; // Import the existing SDK
+// Remove the xummSdk import since we'll use the global reference
 
 import {
   getStakes,
@@ -41,10 +41,8 @@ function stringToHex(str) {
   }
 }
 
-// Use the SDK from walletService.js instead of creating a new one
-// Replace the getXummSdk function with:
+// Use the SDK from walletService.js (now available globally)
 const getXummSdk = () => {
-  // Use the SDK instance from walletService.js
   return window.xummSdk || null;
 };
 

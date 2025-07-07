@@ -6,6 +6,9 @@ const sdk = new XummSdk(
   // DO NOT include the API secret in browser code
 );
 
+// Set it globally for other services to access
+window.xummSdk = sdk;
+
 // Export the SDK instance
 export { sdk as xummSdk };
 
