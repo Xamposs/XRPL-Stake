@@ -1,6 +1,6 @@
 import { XummSdk } from 'xumm-sdk';
 
-// Initialize the Xumm SDK with both API key and secret
+// Initialize the Xumm SDK
 let sdk;
 try {
   sdk = new XummSdk(
@@ -18,118 +18,63 @@ try {
 // Export the SDK instance
 export { sdk as xummSdk };
 
-// Wallet providers
-const WALLET_PROVIDERS = {
-  XRP: ['Xaman', 'GemWallet', 'Crossmark'],
-  FLARE: ['MetaMask', 'Brave Wallet', 'Ledger']
-};
-
-// Connection state - make it globally accessible
-window.connectedWallets = window.connectedWallets || {
-  xrp: null,
-  flare: null
-};
-
-// Use the global object
-let connectedWallets = window.connectedWallets;
-
-// Check if wallet is available in browser
-const isWalletAvailable = (provider) => {
-  switch (provider.toLowerCase()) {
-    case 'xaman':
-    case 'xumm':
-      return typeof window.xaman !== 'undefined' || typeof window.xumm !== 'undefined';
-    case 'gemwallet':
-      return typeof window.gemWallet !== 'undefined';
-    case 'crossmark':
-      return typeof window.crossmark !== 'undefined';
-    case 'metamask':
-      return typeof window.ethereum !== 'undefined';
-    case 'brave wallet':
-      return typeof window.ethereum !== 'undefined' && window.ethereum.isBraveWallet;
-    case 'ledger':
-      // Ledger typically requires a separate integration
-      return false;
-    default:
-      return false;
-  }
-};
-
-// Get available wallet providers
-export const getAvailableWalletProviders = () => {
-  const available = {
-    XRP: WALLET_PROVIDERS.XRP.filter(provider => isWalletAvailable(provider)),
-    FLARE: WALLET_PROVIDERS.FLARE.filter(provider => isWalletAvailable(provider))
-  };
-
-  return available;
-};
-
-// Get XRP balance from XRPL
-const getXRPBalance = async (address) => {
+// Simple XRP balance getter
+export const getXRPBalance = async (address) => {
   try {
-    console.log('Fetching XRP balance for address:', address);
-    
-    const response = await fetch(`https://s1.ripple.com:51234/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        method: 'account_info',
-        params: [{
-          account: address,
-          strict: true,
-          ledger_index: 'current',
-          queue: true
-        }]
-      })
-    });
-
+    const response = await fetch(`https://api.xrpscan.com/api/v1/account/${address}`);
     const data = await response.json();
-    
-    if (data.result && data.result.account_data) {
-      // Convert drops to XRP (1 XRP = 1,000,000 drops)
-      const balanceInDrops = parseInt(data.result.account_data.Balance);
-      const balanceInXRP = balanceInDrops / 1000000;
-      
-      console.log(`Balance for ${address}: ${balanceInXRP} XRP`);
-      return balanceInXRP;
-    } else {
-      console.warn('Account not found or no balance data:', data);
-      return 0;
-    }
+    return parseFloat(data.xrpBalance || 0);
   } catch (error) {
     console.error('Error fetching XRP balance:', error);
     return 0;
   }
 };
 
-// Connect to Xaman wallet - simplified approach without prompt
-const connectToXaman = async () => {
+// Original working Xaman connection with QR code
+export const connectToXaman = async () => {
+  if (!sdk) {
+    throw new Error('Xumm SDK not initialized');
+  }
+
   try {
-    // Check if we have a stored address first
-    const storedAddress = localStorage.getItem('xrpWalletAddress');
+    console.log('Creating Xaman sign-in request...');
     
-    if (storedAddress) {
-      // Validate stored address
-      if (storedAddress.match(/^r[a-zA-Z0-9]{24,34}$/)) {
-        const balance = await getXRPBalance(storedAddress);
-        
+    // Create a simple sign-in request
+    const request = {
+      TransactionType: 'SignIn'
+    };
+
+    const payload = await sdk.payload.create(request);
+    console.log('Xaman payload created:', payload);
+
+    if (payload && payload.next && payload.next.always) {
+      // Open the QR code URL in a new window
+      const qrWindow = window.open(payload.next.always, '_blank', 'width=400,height=600');
+      
+      // Wait for the payload to be resolved
+      const result = await sdk.payload.subscribe(payload.uuid);
+      
+      if (qrWindow) {
+        qrWindow.close();
+      }
+
+      if (result && result.signed) {
         const walletData = {
-          address: storedAddress,
-          balance: balance,
-          provider: 'Xaman',
-          lastConnected: new Date().toISOString()
+          address: result.account,
+          provider: 'xaman',
+          balance: await getXRPBalance(result.account)
         };
         
-        connectedWallets.xrp = walletData;
+        // Store in localStorage
+        localStorage.setItem('xrpWallet', JSON.stringify(walletData));
+        
         return walletData;
+      } else {
+        throw new Error('Transaction was not signed');
       }
+    } else {
+      throw new Error('Failed to create Xaman payload');
     }
-    
-    // If no stored address, throw error to let UI handle address input
-    throw new Error('NEED_ADDRESS_INPUT');
   } catch (error) {
     console.error('Xaman connection error:', error);
     throw error;
@@ -137,37 +82,28 @@ const connectToXaman = async () => {
 };
 
 // Connect to GemWallet
-const connectToGemWallet = async () => {
+export const connectToGemWallet = async () => {
+  if (!window.gemWallet) {
+    throw new Error('GemWallet not found. Please install the GemWallet extension.');
+  }
+
   try {
-    // Check if GemWallet is available
-    if (!window.gemWallet) {
-      throw new Error('GemWallet not found. Please install the GemWallet extension.');
-    }
-
-    // Check if GemWallet is ready
-    const isGemWalletReady = await window.gemWallet.isInstalled();
-    if (!isGemWalletReady) {
-      throw new Error('GemWallet is not ready. Please unlock your wallet.');
-    }
-
-    // Get account
-    const response = await window.gemWallet.connect();
+    const response = await window.gemWallet.request({
+      method: 'wallet_requestPermissions',
+      params: [{
+        maps: ['account']
+      }]
+    });
 
     if (response && response.result && response.result.account) {
-      // Get account balance
-      const balance = await getXRPBalance(response.result.account);
-
-      const walletData = {
-        address: response.result.account,
-        balance: balance,
-        provider: 'GemWallet',
-        lastConnected: new Date().toISOString()
+      const address = response.result.account.address;
+      const balance = await getXRPBalance(address);
+      
+      return {
+        address,
+        provider: 'gemwallet',
+        balance
       };
-
-      // Store in the connected wallet state
-      connectedWallets.xrp = walletData;
-
-      return walletData;
     } else {
       throw new Error('Failed to connect to GemWallet');
     }
@@ -177,32 +113,26 @@ const connectToGemWallet = async () => {
   }
 };
 
-// Connect to Crossmark wallet
-const connectToCrossmark = async () => {
+// Connect to Crossmark
+export const connectToCrossmark = async () => {
+  if (!window.crossmark) {
+    throw new Error('Crossmark not found. Please install the Crossmark extension.');
+  }
+
   try {
-    // Check if Crossmark is available
-    if (!window.crossmark) {
-      throw new Error('Crossmark not found. Please install the Crossmark extension.');
-    }
+    const response = await window.crossmark.request({
+      method: 'sign_in'
+    });
 
-    // Request connection
-    const response = await window.crossmark.connect();
-
-    if (response && response.address) {
-      // Get account balance
-      const balance = await getXRPBalance(response.address);
-
-      const walletData = {
-        address: response.address,
-        balance: balance,
-        provider: 'Crossmark',
-        lastConnected: new Date().toISOString()
+    if (response && response.response && response.response.account) {
+      const address = response.response.account.address;
+      const balance = await getXRPBalance(address);
+      
+      return {
+        address,
+        provider: 'crossmark',
+        balance
       };
-
-      // Store in the connected wallet state
-      connectedWallets.xrp = walletData;
-
-      return walletData;
     } else {
       throw new Error('Failed to connect to Crossmark');
     }
@@ -212,33 +142,25 @@ const connectToCrossmark = async () => {
   }
 };
 
-// Connect to MetaMask for Flare network
-const connectToMetaMask = async () => {
-  try {
-    // Check if MetaMask is available
-    if (!window.ethereum) {
-      throw new Error('MetaMask not found. Please install the MetaMask extension.');
-    }
+// Connect to MetaMask for Flare
+export const connectToMetaMask = async () => {
+  if (!window.ethereum) {
+    throw new Error('MetaMask not found. Please install MetaMask.');
+  }
 
-    // Request account access
+  try {
     const accounts = await window.ethereum.request({
       method: 'eth_requestAccounts'
     });
 
     if (accounts && accounts.length > 0) {
-      const walletData = {
+      return {
         address: accounts[0],
-        balance: 0, // TODO: Implement Flare balance fetching
-        provider: 'MetaMask',
-        lastConnected: new Date().toISOString()
+        provider: 'metamask',
+        balance: 0 // TODO: Implement Flare balance fetching
       };
-
-      // Store in the connected wallet state
-      connectedWallets.flare = walletData;
-
-      return walletData;
     } else {
-      throw new Error('No accounts found in MetaMask');
+      throw new Error('No MetaMask accounts found');
     }
   } catch (error) {
     console.error('MetaMask connection error:', error);
@@ -247,20 +169,11 @@ const connectToMetaMask = async () => {
 };
 
 // Main XRP wallet connection function
-export const connectXRPWallet = async (provider = null) => {
+export const connectXRPWallet = async (provider = 'xaman') => {
+  console.log(`Connecting to XRP wallet with provider: ${provider}`);
+  
   try {
-    let selectedProvider = provider;
-    
-    if (!selectedProvider) {
-      const availableProviders = getAvailableWalletProviders();
-      if (availableProviders.XRP.length > 0) {
-        selectedProvider = availableProviders.XRP[0];
-      } else {
-        throw new Error('No XRP wallet providers available');
-      }
-    }
-
-    switch (selectedProvider.toLowerCase()) {
+    switch (provider.toLowerCase()) {
       case 'xaman':
       case 'xumm':
         return await connectToXaman();
@@ -269,7 +182,7 @@ export const connectXRPWallet = async (provider = null) => {
       case 'crossmark':
         return await connectToCrossmark();
       default:
-        throw new Error(`Unsupported XRP wallet provider: ${selectedProvider}`);
+        return await connectToXaman(); // Default to Xaman
     }
   } catch (error) {
     console.error('XRP wallet connection error:', error);
@@ -278,24 +191,15 @@ export const connectXRPWallet = async (provider = null) => {
 };
 
 // Main Flare wallet connection function
-export const connectFlareWallet = async (provider = null) => {
+export const connectFlareWallet = async (provider = 'metamask') => {
+  console.log(`Connecting to Flare wallet with provider: ${provider}`);
+  
   try {
-    let selectedProvider = provider;
-    
-    if (!selectedProvider) {
-      const availableProviders = getAvailableWalletProviders();
-      if (availableProviders.FLARE.length > 0) {
-        selectedProvider = availableProviders.FLARE[0];
-      } else {
-        throw new Error('No Flare wallet providers available');
-      }
-    }
-
-    switch (selectedProvider.toLowerCase()) {
+    switch (provider.toLowerCase()) {
       case 'metamask':
         return await connectToMetaMask();
       default:
-        throw new Error(`Unsupported Flare wallet provider: ${selectedProvider}`);
+        return await connectToMetaMask(); // Default to MetaMask
     }
   } catch (error) {
     console.error('Flare wallet connection error:', error);
@@ -303,175 +207,61 @@ export const connectFlareWallet = async (provider = null) => {
   }
 };
 
+// Check if wallet is available
+export const isWalletAvailable = (provider) => {
+  switch (provider.toLowerCase()) {
+    case 'xaman':
+    case 'xumm':
+      return !!sdk;
+    case 'gemwallet':
+      return !!window.gemWallet;
+    case 'crossmark':
+      return !!window.crossmark;
+    case 'metamask':
+      return !!window.ethereum;
+    default:
+      return false;
+  }
+};
+
+// Get connected wallet
+export const getConnectedWallet = (type) => {
+  const key = type === 'xrp' ? 'xrpWallet' : 'flareWallet';
+  const stored = localStorage.getItem(key);
+  return stored ? JSON.parse(stored) : null;
+};
+
 // Check wallet connection
 export const checkWalletConnection = async (type, address) => {
+  if (!address) return false;
+  
   try {
     if (type === 'xrp') {
       const balance = await getXRPBalance(address);
-      return balance !== null;
+      return balance >= 0; // If we can fetch balance, wallet is connected
     }
-    return false;
+    return true; // For other types, assume connected if address exists
   } catch (error) {
     console.error('Error checking wallet connection:', error);
     return false;
   }
 };
 
-// Get wallet balance
-export const getWalletBalance = async (type, address) => {
-  try {
-    if (type === 'xrp') {
-      return await getXRPBalance(address);
-    }
-    return 0;
-  } catch (error) {
-    console.error('Error getting wallet balance:', error);
-    return 0;
-  }
-};
-
-// Sign transaction
-export const signTransaction = async (type, address, txData) => {
-  try {
-    if (type === 'xrp') {
-      // For XRP transactions, we'll need to use the appropriate wallet's signing method
-      const connectedWallet = connectedWallets.xrp;
-      if (!connectedWallet) {
-        throw new Error('No XRP wallet connected');
-      }
-
-      switch (connectedWallet.provider) {
-        case 'GemWallet':
-          if (window.gemWallet) {
-            return await window.gemWallet.submitTransaction(txData);
-          }
-          break;
-        case 'Crossmark':
-          if (window.crossmark) {
-            return await window.crossmark.sign(txData);
-          }
-          break;
-        default:
-          throw new Error(`Signing not implemented for ${connectedWallet.provider}`);
-      }
-    }
-    throw new Error('Unsupported transaction type');
-  } catch (error) {
-    console.error('Error signing transaction:', error);
-    throw error;
-  }
-};
-
-// Create and open Xumm payload
-export const createAndOpenXummPayload = async (txjson) => {
-  try {
-    if (!sdk) {
-      throw new Error('Xumm SDK not initialized');
-    }
-
-    const payload = await sdk.payload.create({
-      txjson: txjson
-    });
-
-    if (payload && payload.next && payload.next.always) {
-      window.open(payload.next.always, '_blank');
-      return payload;
-    } else {
-      throw new Error('Failed to create Xumm payload');
-    }
-  } catch (error) {
-    console.error('Error creating Xumm payload:', error);
-    throw error;
-  }
-};
-
-// Submit transaction
-export const submitTransaction = async (type, signedTxData) => {
-  try {
-    if (type === 'xrp') {
-      // Submit to XRPL
-      const response = await fetch('https://s1.ripple.com:51234/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          method: 'submit',
-          params: [{
-            tx_blob: signedTxData
-          }]
-        })
-      });
-
-      const result = await response.json();
-      return result;
-    }
-    throw new Error('Unsupported transaction type');
-  } catch (error) {
-    console.error('Error submitting transaction:', error);
-    throw error;
-  }
-};
-
 // Disconnect wallet
 export const disconnectWallet = async (type) => {
-  try {
-    if (type === 'xrp') {
-      connectedWallets.xrp = null;
-      localStorage.removeItem('xrpWalletAddress');
-    } else if (type === 'flare') {
-      connectedWallets.flare = null;
-    }
-    return true;
-  } catch (error) {
-    console.error('Error disconnecting wallet:', error);
-    return false;
-  }
+  const key = type === 'xrp' ? 'xrpWallet' : 'flareWallet';
+  localStorage.removeItem(key);
 };
 
-// Get connected wallet
-export const getConnectedWallet = (type) => {
+// Get wallet balance
+export const getWalletBalance = async (type, address) => {
   if (type === 'xrp') {
-    return connectedWallets.xrp;
-  } else if (type === 'flare') {
-    return connectedWallets.flare;
+    return await getXRPBalance(address);
   }
-  return null;
+  return 0; // TODO: Implement other wallet balance fetching
 };
 
-// Add a new function to connect with provided address
-export const connectToXamanWithAddress = async (userAddress) => {
-  try {
-    if (!userAddress || userAddress.trim() === '') {
-      throw new Error('No address provided');
-    }
-    
-    // Validate XRP address format
-    if (!userAddress.match(/^r[a-zA-Z0-9]{24,34}$/)) {
-      throw new Error('Invalid XRP address format. XRP addresses start with "r" and are 25-34 characters long.');
-    }
-    
-    // Get account balance
-    const balance = await getXRPBalance(userAddress);
-    
-    const walletData = {
-      address: userAddress,
-      balance: balance,
-      provider: 'Xaman',
-      lastConnected: new Date().toISOString()
-    };
-    
-    // Store in the connected wallet state
-    connectedWallets.xrp = walletData;
-    
-    // Store address in localStorage
-    localStorage.setItem('xrpWalletAddress', userAddress);
-    
-    return walletData;
-  } catch (error) {
-    console.error('Xaman connection with address error:', error);
-    throw error;
-  }
+// Sign transaction (placeholder)
+export const signTransaction = async (transaction, walletType) => {
+  throw new Error('Transaction signing not implemented yet');
 };
-
-export { isWalletAvailable };
