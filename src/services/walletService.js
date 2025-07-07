@@ -105,38 +105,31 @@ const getXRPBalance = async (address) => {
   }
 };
 
-// Connect to Xaman wallet using simple address input (CORS-safe)
+// Connect to Xaman wallet - simplified approach without prompt
 const connectToXaman = async () => {
   try {
-    // Simple approach: ask user to enter their XRP address
-    const userAddress = prompt('Please enter your XRP address from Xaman wallet:');
+    // Check if we have a stored address first
+    const storedAddress = localStorage.getItem('xrpWalletAddress');
     
-    if (!userAddress) {
-      throw new Error('No address provided');
+    if (storedAddress) {
+      // Validate stored address
+      if (storedAddress.match(/^r[a-zA-Z0-9]{24,34}$/)) {
+        const balance = await getXRPBalance(storedAddress);
+        
+        const walletData = {
+          address: storedAddress,
+          balance: balance,
+          provider: 'Xaman',
+          lastConnected: new Date().toISOString()
+        };
+        
+        connectedWallets.xrp = walletData;
+        return walletData;
+      }
     }
     
-    // Validate XRP address format (basic validation)
-    if (!userAddress.match(/^r[a-zA-Z0-9]{24,34}$/)) {
-      throw new Error('Invalid XRP address format');
-    }
-    
-    // Get account balance
-    const balance = await getXRPBalance(userAddress);
-    
-    const walletData = {
-      address: userAddress,
-      balance: balance,
-      provider: 'Xaman',
-      lastConnected: new Date().toISOString()
-    };
-    
-    // Store in the connected wallet state
-    connectedWallets.xrp = walletData;
-    
-    // Store address in localStorage
-    localStorage.setItem('xrpWalletAddress', userAddress);
-    
-    return walletData;
+    // If no stored address, throw error to let UI handle address input
+    throw new Error('NEED_ADDRESS_INPUT');
   } catch (error) {
     console.error('Xaman connection error:', error);
     throw error;
@@ -211,7 +204,7 @@ const connectToCrossmark = async () => {
 
       return walletData;
     } else {
-      throw new Error('Failed to connect to Crossmark wallet');
+      throw new Error('Failed to connect to Crossmark');
     }
   } catch (error) {
     console.error('Crossmark connection error:', error);
@@ -219,7 +212,7 @@ const connectToCrossmark = async () => {
   }
 };
 
-// Connect to MetaMask (for Flare network)
+// Connect to MetaMask for Flare network
 const connectToMetaMask = async () => {
   try {
     // Check if MetaMask is available
@@ -227,22 +220,15 @@ const connectToMetaMask = async () => {
       throw new Error('MetaMask not found. Please install the MetaMask extension.');
     }
 
-    // Request accounts
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    // Request account access
+    const accounts = await window.ethereum.request({
+      method: 'eth_requestAccounts'
+    });
 
     if (accounts && accounts.length > 0) {
-      // Get ETH balance
-      const balance = await window.ethereum.request({
-        method: 'eth_getBalance',
-        params: [accounts[0], 'latest']
-      });
-
-      // Convert from wei to ETH
-      const balanceInEth = parseInt(balance, 16) / 1e18;
-
       const walletData = {
         address: accounts[0],
-        balance: balanceInEth,
+        balance: 0, // TODO: Implement Flare balance fetching
         provider: 'MetaMask',
         lastConnected: new Date().toISOString()
       };
@@ -252,7 +238,7 @@ const connectToMetaMask = async () => {
 
       return walletData;
     } else {
-      throw new Error('Failed to connect to MetaMask');
+      throw new Error('No accounts found in MetaMask');
     }
   } catch (error) {
     console.error('MetaMask connection error:', error);
@@ -451,6 +437,41 @@ export const getConnectedWallet = (type) => {
     return connectedWallets.flare;
   }
   return null;
+};
+
+// Add a new function to connect with provided address
+export const connectToXamanWithAddress = async (userAddress) => {
+  try {
+    if (!userAddress || userAddress.trim() === '') {
+      throw new Error('No address provided');
+    }
+    
+    // Validate XRP address format
+    if (!userAddress.match(/^r[a-zA-Z0-9]{24,34}$/)) {
+      throw new Error('Invalid XRP address format. XRP addresses start with "r" and are 25-34 characters long.');
+    }
+    
+    // Get account balance
+    const balance = await getXRPBalance(userAddress);
+    
+    const walletData = {
+      address: userAddress,
+      balance: balance,
+      provider: 'Xaman',
+      lastConnected: new Date().toISOString()
+    };
+    
+    // Store in the connected wallet state
+    connectedWallets.xrp = walletData;
+    
+    // Store address in localStorage
+    localStorage.setItem('xrpWalletAddress', userAddress);
+    
+    return walletData;
+  } catch (error) {
+    console.error('Xaman connection with address error:', error);
+    throw error;
+  }
 };
 
 export { isWalletAvailable };
