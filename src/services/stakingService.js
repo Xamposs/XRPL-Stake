@@ -356,19 +356,39 @@ export const estimateReward = async (amount, rewardRate, days) => {
   });
 };
 
-// Initialize Xaman SDK for browser use (no API secret)
-// Replace the try-catch block around lines 360-371 with:
-try {
+// Remove the problematic SDK initialization and replace with:
+// The SDK is already initialized in walletService.js, so we don't need to initialize it again here
+// Just use window.xummSdk when needed, or import from walletService.js
+
+// Remove these lines completely:
+// try {
+//   if (!window.xummSdk) {
+//     window.xummSdk = new XummSdk(
+//       import.meta.env.VITE_XAMAN_API_KEY
+//       // No API secret for browser usage
+//     );
+//   }
+// } catch (error) {
+//   console.error('Error initializing Xumm SDK:', error);
+//   window.xummSdk = null;
+// }
+
+// Instead, import the SDK instance from walletService.js
+import { XummSdk } from 'xumm-sdk';
+import { API_CONFIG } from '../config/api.js';
+
+// Create SDK instance only when needed, not at module level
+const getXummSdk = () => {
   if (!window.xummSdk) {
-    window.xummSdk = new XummSdk(
-      import.meta.env.VITE_XAMAN_API_KEY
-      // No API secret for browser usage
-    );
+    try {
+      window.xummSdk = new XummSdk(import.meta.env.VITE_XAMAN_API_KEY);
+    } catch (error) {
+      console.error('Error initializing Xumm SDK:', error);
+      window.xummSdk = null;
+    }
   }
-} catch (error) {
-  console.error('Error initializing Xumm SDK:', error);
-  window.xummSdk = null;
-}
+  return window.xummSdk;
+};
 
 // Create a new stake using backend API to avoid CORS issues
 export const createStake = async (userAddress, poolId, amount) => {
@@ -389,7 +409,8 @@ export const createStake = async (userAddress, poolId, amount) => {
     }
 
     // Try to use the Xumm SDK directly if available
-    if (window.xummSdk) {
+    const xummSdk = getXummSdk();
+    if (xummSdk) {
       try {
         console.log('Using Xumm SDK directly to create payload');
 
@@ -429,7 +450,7 @@ export const createStake = async (userAddress, poolId, amount) => {
         console.log('Created payload:', payload);
 
         // Create the payload with Xumm SDK
-        const response = await window.xummSdk.payload.create(payload);
+        const response = await xummSdk.payload.create(payload);
         console.log('Xumm SDK response:', response);
 
         if (response && response.uuid) {
