@@ -8,13 +8,10 @@ import Dashboard from './components/Dashboard/Dashboard';
 import StakingPanel from './components/Staking/StakingPanel';
 import RewardsPanel from './components/Rewards/RewardsPanel';
 import Documentation from './components/Documentation/Documentation';
-// Remove XamanCallback import since OAuth is no longer used
-// import XamanCallback from './components/Auth/XamanCallback';
+import AddressInputModal from './components/Wallet/AddressInputModal';
 import { WalletProvider } from './context/WalletContext';
 import { StakingProvider } from './context/StakingContext';
 import { XummProvider } from './context/XummContext';
-// Remove checkXamanOAuthCallback import since OAuth is no longer used
-// import { checkXamanOAuthCallback } from './services/walletService';
 import { initStorage } from './services/storageService';
 import favicon from './assets/images/favicon.ico';
 import './styles/BackgroundEffect.css';
@@ -111,6 +108,7 @@ function App() {
           <Footer />
         </div>
       </div>
+      <AddressInputModal />
     </div>
   );
 
@@ -120,8 +118,6 @@ function App() {
         <WalletProvider>
           <StakingProvider>
             <Routes>
-              {/* Remove OAuth callback route since OAuth is no longer used */}
-              {/* <Route path="/auth/callback" element={<XamanCallback />} /> */}
               <Route path="/" element={<AppLayout />} />
               <Route path="/stake" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
