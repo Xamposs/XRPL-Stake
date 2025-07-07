@@ -30,55 +30,39 @@ export const getXRPBalance = async (address) => {
   }
 };
 
-// Original working Xaman connection with QR code
+// Manual address input for Xaman
 export const connectToXaman = async () => {
-  if (!sdk) {
-    throw new Error('Xumm SDK not initialized');
-  }
-
-  try {
-    console.log('Creating Xaman sign-in request...');
+  return new Promise((resolve, reject) => {
+    const address = prompt('Please enter your XRP address from your Xaman wallet:');
     
-    // Create a simple sign-in request
-    const request = {
-      TransactionType: 'SignIn'
-    };
-
-    const payload = await sdk.payload.create(request);
-    console.log('Xaman payload created:', payload);
-
-    if (payload && payload.next && payload.next.always) {
-      // Open the QR code URL in a new window
-      const qrWindow = window.open(payload.next.always, '_blank', 'width=400,height=600');
-      
-      // Wait for the payload to be resolved
-      const result = await sdk.payload.subscribe(payload.uuid);
-      
-      if (qrWindow) {
-        qrWindow.close();
-      }
-
-      if (result && result.signed) {
+    if (!address) {
+      reject(new Error('No address provided'));
+      return;
+    }
+    
+    // Basic XRP address validation
+    if (!address.startsWith('r') || address.length < 25) {
+      reject(new Error('Invalid XRP address format'));
+      return;
+    }
+    
+    // Get balance and return wallet data
+    getXRPBalance(address)
+      .then(balance => {
         const walletData = {
-          address: result.account,
+          address,
           provider: 'xaman',
-          balance: await getXRPBalance(result.account)
+          balance
         };
         
         // Store in localStorage
         localStorage.setItem('xrpWallet', JSON.stringify(walletData));
-        
-        return walletData;
-      } else {
-        throw new Error('Transaction was not signed');
-      }
-    } else {
-      throw new Error('Failed to create Xaman payload');
-    }
-  } catch (error) {
-    console.error('Xaman connection error:', error);
-    throw error;
-  }
+        resolve(walletData);
+      })
+      .catch(error => {
+        reject(new Error('Failed to verify address: ' + error.message));
+      });
+  });
 };
 
 // Connect to GemWallet
@@ -212,7 +196,7 @@ export const isWalletAvailable = (provider) => {
   switch (provider.toLowerCase()) {
     case 'xaman':
     case 'xumm':
-      return !!sdk;
+      return true; // Always available since it's manual input
     case 'gemwallet':
       return !!window.gemWallet;
     case 'crossmark':

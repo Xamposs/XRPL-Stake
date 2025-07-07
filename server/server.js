@@ -613,6 +613,52 @@ function updateAllRewards() {
 // Middleware
 app.use(bodyParser.json());
 
+// Add CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// Xaman proxy endpoint
+app.post('/api/xaman/payload', async (req, res) => {
+  try {
+    const { XummSdk } = require('xumm-sdk');
+    const sdk = new XummSdk(
+      process.env.VITE_XAMAN_API_KEY,
+      process.env.VITE_XAMAN_API_SECRET
+    );
+    
+    const payload = await sdk.payload.create(req.body);
+    res.json(payload);
+  } catch (error) {
+    console.error('Xaman proxy error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/xaman/payload/:uuid', async (req, res) => {
+  try {
+    const { XummSdk } = require('xumm-sdk');
+    const sdk = new XummSdk(
+      process.env.VITE_XAMAN_API_KEY,
+      process.env.VITE_XAMAN_API_SECRET
+    );
+    
+    const result = await sdk.payload.get(req.params.uuid);
+    res.json(result);
+  } catch (error) {
+    console.error('Xaman proxy error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Check if API credentials and XRPL details are set
 if (!process.env.XAMAN_API_KEY || !process.env.XAMAN_API_SECRET) {
   console.warn('WARNING: Xaman API credentials are missing in .env file. Staking via Xumm App might not work.');
