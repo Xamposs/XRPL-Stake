@@ -1,13 +1,17 @@
 import { XummSdk } from 'xumm-sdk';
 
 // Initialize the Xumm SDK with ONLY the API key (no secret for browser)
-const sdk = new XummSdk(
-  import.meta.env.VITE_XAMAN_API_KEY
-  // DO NOT include the API secret in browser code
-);
-
-// Set it globally for other services to access
-window.xummSdk = sdk;
+let sdk;
+try {
+  sdk = new XummSdk(import.meta.env.VITE_XAMAN_API_KEY);
+  // Set it globally for other services to access
+  window.xummSdk = sdk;
+  console.log('Xumm SDK initialized successfully');
+} catch (error) {
+  console.error('Failed to initialize Xumm SDK:', error);
+  sdk = null;
+  window.xummSdk = null;
+}
 
 // Export the SDK instance
 export { sdk as xummSdk };

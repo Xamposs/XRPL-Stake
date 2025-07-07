@@ -3,7 +3,7 @@
 
 // Keep only:
 import { API_CONFIG } from '../config/api.js';
-// Remove the xummSdk import since we'll use the global reference
+// No XummSdk import needed
 
 import {
   getStakes,
@@ -43,7 +43,11 @@ function stringToHex(str) {
 
 // Use the SDK from walletService.js (now available globally)
 const getXummSdk = () => {
-  return window.xummSdk || null;
+  if (!window.xummSdk) {
+    console.warn('Xumm SDK not available. Make sure walletService.js is loaded first.');
+    return null;
+  }
+  return window.xummSdk;
 };
 
 // Staking pools data (could be moved to an API call in the future)
