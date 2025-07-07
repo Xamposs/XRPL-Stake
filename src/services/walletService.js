@@ -106,6 +106,11 @@ const getXRPBalance = async (address) => {
 // Connect to Xaman wallet (simplified) - SINGLE VERSION ONLY
 const connectToXaman = async () => {
   try {
+    // Check if SDK is available
+    if (!sdk || !window.xummSdk) {
+      throw new Error('Xaman SDK not initialized. Please check your API key configuration.');
+    }
+
     // Use the SDK to create a simple sign-in request
     const request = {
       txjson: {
@@ -154,6 +159,8 @@ const connectToXaman = async () => {
         uuid: payload.uuid,
         subscription: subscription
       };
+    } else {
+      throw new Error('Failed to create Xaman payload');
     }
   } catch (error) {
     console.error('Xaman connection error:', error);
