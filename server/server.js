@@ -626,34 +626,42 @@ app.use((req, res, next) => {
 });
 
 // Xaman proxy endpoint
-app.post('/api/xaman/payload', async (req, res) => {
+// Xaman QR Code endpoint
+app.post('/api/xaman/signin', async (req, res) => {
   try {
-    const { XummSdk } = require('xumm-sdk');
-    const sdk = new XummSdk(
-      process.env.VITE_XAMAN_API_KEY,
-      process.env.VITE_XAMAN_API_SECRET
-    );
+    console.log('Creating Xaman sign-in payload...');
     
-    const payload = await sdk.payload.create(req.body);
-    res.json(payload);
+    const payload = await xummSdk.payload.create({
+      TransactionType: 'SignIn'
+    });
+    
+    console.log('Payload created:', payload.uuid);
+    
+    res.json({
+      uuid: payload.uuid,
+      qr: payload.refs.qr_png,
+      qr_uri: payload.next.always,
+      websocket: payload.refs.websocket_status
+    });
   } catch (error) {
-    console.error('Xaman proxy error:', error);
+    console.error('Error creating Xaman payload:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// Check payload status
 app.get('/api/xaman/payload/:uuid', async (req, res) => {
   try {
-    const { XummSdk } = require('xumm-sdk');
-    const sdk = new XummSdk(
-      process.env.VITE_XAMAN_API_KEY,
-      process.env.VITE_XAMAN_API_SECRET
-    );
+    const payload = await xummSdk.payload.get(req.params.uuid);
     
-    const result = await sdk.payload.get(req.params.uuid);
-    res.json(result);
+    res.json({
+      signed: payload.meta.signed,
+      resolved: payload.meta.resolved,
+      account: payload.response?.account || null,
+      txid: payload.response?.txid || null
+    });
   } catch (error) {
-    console.error('Xaman proxy error:', error);
+    console.error('Error checking payload:', error);
     res.status(500).json({ error: error.message });
   }
 });
