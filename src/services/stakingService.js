@@ -37,6 +37,19 @@ function stringToHex(str) {
   }
 }
 
+// Create SDK instance only when needed, not at module level
+const getXummSdk = () => {
+  if (!window.xummSdk) {
+    try {
+      window.xummSdk = new XummSdk(import.meta.env.VITE_XAMAN_API_KEY);
+    } catch (error) {
+      console.error('Error initializing Xumm SDK:', error);
+      window.xummSdk = null;
+    }
+  }
+  return window.xummSdk;
+};
+
 // Staking pools data (could be moved to an API call in the future)
 const stakingPools = [
   {
@@ -310,7 +323,6 @@ export const getUserStakes = async (userAddress) => {
   }
 };
 
-
 // Get user's staking stats based on actual stakes
 export const getStakingStats = async (userAddress) => {
   if (!userAddress) {
@@ -354,40 +366,6 @@ export const estimateReward = async (amount, rewardRate, days) => {
       resolve(Math.round(periodReward * 100) / 100);
     }, 500);
   });
-};
-
-// Remove the problematic SDK initialization and replace with:
-// The SDK is already initialized in walletService.js, so we don't need to initialize it again here
-// Just use window.xummSdk when needed, or import from walletService.js
-
-// Remove these lines completely:
-// try {
-//   if (!window.xummSdk) {
-//     window.xummSdk = new XummSdk(
-//       import.meta.env.VITE_XAMAN_API_KEY
-//       // No API secret for browser usage
-//     );
-//   }
-// } catch (error) {
-//   console.error('Error initializing Xumm SDK:', error);
-//   window.xummSdk = null;
-// }
-
-// Instead, import the SDK instance from walletService.js
-import { XummSdk } from 'xumm-sdk';
-import { API_CONFIG } from '../config/api.js';
-
-// Create SDK instance only when needed, not at module level
-const getXummSdk = () => {
-  if (!window.xummSdk) {
-    try {
-      window.xummSdk = new XummSdk(import.meta.env.VITE_XAMAN_API_KEY);
-    } catch (error) {
-      console.error('Error initializing Xumm SDK:', error);
-      window.xummSdk = null;
-    }
-  }
-  return window.xummSdk;
 };
 
 // Create a new stake using backend API to avoid CORS issues
@@ -604,8 +582,6 @@ export const createStake = async (userAddress, poolId, amount) => {
   }
 };
 
-
-
 // Check transaction status
 export const checkTransactionStatus = async (uuid) => {
   if (!uuid) {
@@ -623,7 +599,7 @@ export const checkTransactionStatus = async (uuid) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to get transaction status');
+      throw new Error(errorData.error || 'Failed to check transaction status');
     }
 
     return await response.json();
@@ -633,176 +609,112 @@ export const checkTransactionStatus = async (uuid) => {
   }
 };
 
-// Unstake (withdraw staked XRP)
+// Unstake function
 export const unstake = async (stakeId) => {
   if (!stakeId) {
-    throw new Error('Invalid stake ID');
+    throw new Error('Stake ID is required');
   }
 
   try {
-    // Get the user's wallet address from multiple possible sources
-    let userAddress = localStorage.getItem('xrpWalletAddress');
-
-    // If not in localStorage, try to get from the connectedWallets object
-    if (!userAddress && window.connectedWallets && window.connectedWallets.xrp) {
-      userAddress = window.connectedWallets.xrp.address;
+    // Get the stake details first
+    const stakes = getStakes();
+    const stake = stakes.find(s => s.id === stakeId);
+    
+    if (!stake) {
+      throw new Error('Stake not found');
     }
 
-    // If still not found, try to get from the xaman_tokens in localStorage
+    // Check if the stake is still locked
+    const now = new Date();
+    const endDate = new Date(stake.endDate);
+    
+    if (now < endDate) {
+      throw new Error('Stake is still locked. Cannot unstake before the lock period ends.');
+    }
+
+    // Get user address from localStorage or connected wallets
+    const userAddress = localStorage.getItem('xrpWalletAddress') ||
+                      (window.connectedWallets && window.connectedWallets.xrp ?
+                      window.connectedWallets.xrp.address : null);
+    
     if (!userAddress) {
-      const xamanTokens = localStorage.getItem('xaman_tokens');
-      if (xamanTokens) {
-        try {
-          // Try to get user info from Xaman
-          const tokens = JSON.parse(xamanTokens);
-          if (tokens && tokens.accessToken) {
-            // We have a token, but we need to get the user info
-            console.log('Found Xaman tokens, trying to get user info');
-
-            // For now, let's check if we have the address stored elsewhere
-            const xrpWallet = localStorage.getItem('xrpWallet');
-            if (xrpWallet) {
-              const walletData = JSON.parse(xrpWallet);
-              if (walletData && walletData.address) {
-                userAddress = walletData.address;
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Error parsing Xaman tokens:', e);
-        }
-      }
+      throw new Error('User address not found. Please connect your wallet.');
     }
 
-    // Log the wallet address for debugging
-    console.log('Using XRP wallet address:', userAddress);
-
-    if (!userAddress) {
-      throw new Error('XRP wallet not connected');
-    }
-
-    console.log(`Attempting to unstake with stakeId: ${stakeId}`);
-
-    // First, try to get the stake from persistent storage
-    let stake = null;
-    try {
-      const persistentStakes = getStakes();
-      stake = persistentStakes.find(s => s.id === stakeId || s.txHash === stakeId || s.txId === stakeId);
-      if (stake) {
-        console.log('Found stake in persistent storage:', stake);
-      }
-    } catch (error) {
-      console.error('Error getting stakes from persistent storage:', error);
-    }
-
-    // If not found in confirmed stakes, try to get from XRPL
-    if (!stake) {
-      try {
-        const xrplService = await import('./xrplService');
-        const xrplStakes = await xrplService.getStakingTransactions(userAddress);
-        stake = xrplStakes.find(s => s.id === stakeId || s.txHash === stakeId || s.txId === stakeId);
-        if (stake) {
-          console.log('Found stake in XRPL transactions:', stake);
-        }
-      } catch (error) {
-        console.error('Error getting stakes from XRPL:', error);
-      }
-    }
-
-    // If still not found, try to get from backend
-    if (!stake) {
-      try {
-        const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.USER_STAKES}/${userAddress}`);
-        if (response.ok) {
-          const backendStakes = await response.json();
-          if (Array.isArray(backendStakes)) {
-            stake = backendStakes.find(s => s.id === stakeId || s.txHash === stakeId || s.txId === stakeId);
-            if (stake) {
-              console.log('Found stake in backend:', stake);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error getting stakes from backend:', error);
-      }
-    }
-
-    // If we can't find the stake, use a fallback approach
-    if (!stake) {
-      console.log(`Stake not found, using fallback approach with stakeId as amount`);
-      // Try to extract amount from stakeId if it's in a format like "tx_123_10.5"
-      let fallbackAmount = 0;
-
-      try {
-        // If stakeId contains the amount, try to extract it
-        if (stakeId.includes('_')) {
-          const parts = stakeId.split('_');
-          const lastPart = parts[parts.length - 1];
-          if (!isNaN(parseFloat(lastPart))) {
-            fallbackAmount = parseFloat(lastPart);
-          }
-        }
-
-        // If we still don't have an amount, ask the user
-        if (fallbackAmount <= 0) {
-          const userInput = prompt('Please enter the amount you staked (in XRP):', '10');
-          fallbackAmount = parseFloat(userInput);
-        }
-
-        if (!isNaN(fallbackAmount) && fallbackAmount > 0) {
-          console.log(`Using fallback amount: ${fallbackAmount} XRP`);
-          return await unstakeWithAmount(userAddress, stakeId, fallbackAmount);
-        } else {
-          throw new Error('Invalid amount provided');
-        }
-      } catch (error) {
-        console.error('Error in fallback approach:', error);
-        throw new Error('Could not determine stake amount. Please try again with a valid amount.');
-      }
-    }
-
-    // Ensure we have a valid amount
-    if (!stake.amount || isNaN(parseFloat(stake.amount)) || parseFloat(stake.amount) <= 0) {
-      console.log(`Invalid stake amount:`, stake.amount);
-
-      // Ask the user for the amount
-      try {
-        const userInput = prompt('Please enter the amount you staked (in XRP):', '10');
-        const userAmount = parseFloat(userInput);
-
-        if (!isNaN(userAmount) && userAmount > 0) {
-          console.log(`Using user-provided amount: ${userAmount} XRP`);
-          return await unstakeWithAmount(userAddress, stakeId, userAmount);
-        } else {
-          throw new Error('Invalid amount provided');
-        }
-      } catch (error) {
-        console.error('Error getting user input:', error);
-        throw new Error('Invalid stake amount. Please try again with a valid amount.');
-      }
-    }
-
-    const amount = parseFloat(stake.amount);
-    console.log(`Unstaking stake ${stakeId} with amount ${amount} XRP`);
-
-    // Use the helper function to unstake with the amount
-    return await unstakeWithAmount(userAddress, stakeId, amount);
+    // Call the unstake with amount function
+    return await unstakeWithAmount(userAddress, stakeId, stake.amount);
+    
   } catch (error) {
     console.error('Error unstaking:', error);
     throw error;
   }
 };
 
-// Helper function to unstake with a specific amount
 const unstakeWithAmount = async (userAddress, stakeId, amount) => {
+  if (!userAddress || !stakeId || amount <= 0) {
+    throw new Error('Invalid unstaking parameters');
+  }
+
   try {
-    console.log(`Unstaking with specific amount: ${amount} XRP`);
+    // Try to use the Xumm SDK directly if available
+    const xummSdk = getXummSdk();
+    if (xummSdk) {
+      try {
+        console.log('Using Xumm SDK directly to create unstake payload');
 
-    console.log('Bypassing direct Xumm SDK call for unstaking, proceeding to backend API.');
-    // The Xumm SDK direct call block was removed to avoid 'Buffer is not defined' errors in browser.
-    // Unstaking will now always use the backend API call below.
+        // Create a simpler memo for unstaking
+        const memo = {
+          action: 'unstake',
+          stakeId: stakeId,
+          amount: amount
+        };
+        
+        // Fix the memo hex conversion
+        const memoHex = stringToHex(JSON.stringify(memo));
+        
+        // Create the transaction payload for unstaking
+        const payload = {
+          txjson: {
+            TransactionType: 'Payment',
+            Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF',
+            Amount: '1000000', // 1 XRP fee for unstaking
+            Memos: [
+              {
+                Memo: {
+                  MemoType: stringToHex('XrpFlrUnstaking'),
+                  MemoData: memoHex,
+                  MemoFormat: stringToHex('application/json')
+                }
+              }
+            ]
+          }
+        };
 
-    // Call the backend API to request unstaking
+        console.log('Created unstake payload:', payload);
+
+        // Create the payload with Xumm SDK
+        const response = await xummSdk.payload.create(payload);
+        console.log('Xumm SDK unstake response:', response);
+
+        if (response && response.uuid) {
+          // Track the unstaking transaction
+          trackTransaction(response.uuid, TRANSACTION_STATUS.PENDING, {
+            type: 'unstake',
+            stakeId,
+            amount,
+            userAddress
+          });
+
+          return response;
+        }
+      } catch (sdkError) {
+        console.error('Error using Xumm SDK directly for unstaking:', sdkError);
+        // Fall back to backend API
+      }
+    }
+
+    // Fall back to backend API if direct SDK approach fails
+    console.log('Falling back to backend API for unstaking');
     let response;
     try {
       response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UNSTAKE}`, {
@@ -817,177 +729,122 @@ const unstakeWithAmount = async (userAddress, stakeId, amount) => {
         }),
       });
     } catch (error) {
-      console.error('Error connecting to backend server:', error);
+      console.error('Error connecting to backend server for unstaking:', error);
 
-      // If backend fails, create a direct URL to Xumm for unstaking
-      console.log('Backend failed, creating direct Xumm URL for unstaking');
+      // If backend fails, use Xaman SDK directly with simpler memo
+      console.log('Backend failed, using Xaman SDK directly for unstaking');
 
-      // Create a simpler memo for unstaking
-        const memo = {
-          action: 'unstake',
-          stake: stakeId,
-          amount: parseFloat(amount)
+      if (!window.xummSdk) {
+        throw new Error('Xaman SDK not available and backend failed');
+      }
+
+      try {
+        // Create a much simpler memo to reduce payload size
+        const memo = `unstake:${stakeId}:${amount}`;
+        
+        // Create the transaction payload using SDK
+        const payload = {
+          txjson: {
+            TransactionType: 'Payment',
+            Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF',
+            Amount: '1000000', // 1 XRP fee for unstaking
+            Memos: [
+              {
+                Memo: {
+                  MemoType: stringToHex('unstake'),
+                  MemoData: stringToHex(memo),
+                  MemoFormat: stringToHex('text/plain')
+                }
+              }
+            ]
+          }
         };
 
-      // Create a transaction payload
-      const txJson = {
-        TransactionType: 'Payment',
-        Destination: 'rJoyoiwgogxk2bA3UBBfZthrb8LdUmocaF', // Staking wallet address
-        Amount: '1', // Minimal amount for unstaking request
-        Memos: [
-          {
-            Memo: {
-              MemoType: stringToHex('XrpFlrUnstaking'),
-              MemoData: stringToHex(JSON.stringify(memo)),
-              MemoFormat: stringToHex('application/json')
-            }
-          }
-        ]
-      };
+        console.log('Creating unstake payload with Xaman SDK:', payload);
 
-      // URL encode the transaction JSON
-      const txJsonStr = JSON.stringify(txJson);
-      const encodedTx = encodeURIComponent(txJsonStr);
+        // Create the payload with Xaman SDK
+        const response = await window.xummSdk.payload.create(payload);
+        console.log('Xaman SDK unstake response:', response);
 
-      // Create the Xumm URL
-      const xummUrl = `https://xumm.app/sign?tx=${encodedTx}`;
+        if (response && response.uuid) {
+          // Track the unstaking transaction
+          trackTransaction(response.uuid, TRANSACTION_STATUS.PENDING, {
+            type: 'unstake',
+            stakeId,
+            amount,
+            userAddress
+          });
 
-      // Remove the stake from persistent storage
-      try {
-        removeStake(stakeId);
-      } catch (error) {
-        console.warn('Error removing stake from persistent storage:', error);
+          return response;
+        } else {
+          throw new Error('Failed to create Xaman unstake payload');
+        }
+      } catch (sdkError) {
+        console.error('Error using Xaman SDK for unstaking:', sdkError);
+        throw new Error('Both backend and Xaman SDK failed for unstaking. Please try again later.');
       }
-
-      return {
-        stakeId,
-        status: 'pending',
-        message: 'Your unstaking request has been submitted. Please sign the transaction.',
-        requestId: `unstake-${Date.now()}`,
-        timestamp: Date.now(),
-        paymentUrl: xummUrl
-      };
     }
 
-    console.log('Unstaking request response status:', response.status);
-
-    // Parse the response
-    const responseData = await response.json();
-
-    // Check if the request was successful
     if (!response.ok) {
-      throw new Error(responseData.error || 'Failed to unstake XRP');
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create unstaking transaction');
     }
 
-    // Check if the request is pending or completed
-    if (responseData.status === 'pending') {
-      console.log('Unstaking request is pending:', responseData);
+    const payloadData = await response.json();
 
-      // Remove the stake from persistent storage
-      try {
-        removeStake(stakeId);
-      } catch (error) {
-        console.warn('Error removing stake from persistent storage:', error);
-      }
+    // Track the unstaking transaction
+    trackTransaction(payloadData.uuid, TRANSACTION_STATUS.PENDING, {
+      type: 'unstake',
+      stakeId,
+      amount,
+      userAddress
+    });
 
-      return {
-        stakeId,
-        status: 'pending',
-        message: responseData.message || 'Your unstaking request is being processed.',
-        requestId: responseData.requestId,
-        timestamp: responseData.timestamp,
-        paymentUrl: responseData.paymentUrl
-      };
-    } else if (responseData.status === 'completed') {
-      console.log('Unstaking request completed:', responseData);
+    // Return the entire payload object
+    return payloadData;
 
-      // Remove the stake from persistent storage
-      try {
-        removeStake(stakeId);
-      } catch (error) {
-        console.warn('Error removing stake from persistent storage:', error);
-      }
-
-      return {
-        stakeId,
-        status: 'completed',
-        message: responseData.message || 'Your unstaking request has been completed. The XRP has been sent back to your wallet.',
-        requestId: responseData.requestId,
-        timestamp: responseData.timestamp,
-        result: responseData.result
-      };
-    }
-
-    // Return the result
-    return responseData;
   } catch (error) {
-    console.error('Error unstaking:', error);
+    console.error('Error creating unstake transaction:', error);
     throw error;
   }
 };
 
-// Check unstaking status
+// Check unstake status
 export const checkUnstakeStatus = async (stakeId) => {
   if (!stakeId) {
     throw new Error('Stake ID is required');
   }
 
   try {
-    // Call the backend API to check unstaking status
-    let response;
-    try {
-      // Replace :stakeId with the actual stakeId
-      const endpoint = API_CONFIG.ENDPOINTS.UNSTAKE_STATUS.replace(':stakeId', stakeId);
-      response = await fetch(`${API_CONFIG.BASE_URL}${endpoint}`);
-    } catch (error) {
-      console.error('Error connecting to backend server:', error);
-      throw new Error('Could not connect to the backend server. Please make sure the server is running.');
-    }
-
-    // Parse the response
-    const responseData = await response.json();
-
-    // Check if the request was successful
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UNSTAKE}/${stakeId}`);
+    
     if (!response.ok) {
-      throw new Error(responseData.error || 'Failed to check unstaking status');
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to check unstake status');
     }
 
-    // Return the result
-    return responseData;
+    return await response.json();
   } catch (error) {
-    console.error('Error checking unstaking status:', error);
+    console.error('Error checking unstake status:', error);
     throw error;
   }
 };
 
-// Note: The unstakeWithAmount function is now defined above
-
-// Get platform stats
+// Get platform statistics
 export const getPlatformStats = async () => {
-  try {
-    // Call the backend API to get platform stats
-    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PLATFORM_STATS}`);
-
-    // Parse the response
-    const responseData = await response.json();
-
-    // Check if the request was successful
-    if (!response.ok) {
-      throw new Error(responseData.error || 'Failed to get platform stats');
-    }
-
-    // Return the result
-    return {
-      totalXrpStaked: responseData.totalXrpStaked,
-      averageApy: responseData.averageApy,
-      totalStakers: responseData.totalStakers,
-      poolDistribution: responseData.poolDistribution,
-      mostPopularPool: responseData.mostPopularPool,
-      highestYieldPool: responseData.highestYieldPool
-    };
-  } catch (error) {
-    console.error('Error getting platform stats:', error);
-    // Throw the error to be handled by the caller
-    throw error;
-  }
+  // Simulate API call delay
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const totalValueLocked = stakingPools.reduce((sum, pool) => sum + pool.totalStaked, 0);
+      const totalStakers = 1250; // This would come from a real API
+      const averageAPY = stakingPools.reduce((sum, pool) => sum + pool.rewardRate, 0) / stakingPools.length;
+      
+      resolve({
+        totalValueLocked,
+        totalStakers,
+        averageAPY: Math.round(averageAPY * 100) / 100,
+        activePools: stakingPools.filter(pool => pool.isActive).length
+      });
+    }, 600);
+  });
 };
