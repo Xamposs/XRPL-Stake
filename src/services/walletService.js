@@ -6,6 +6,9 @@ const sdk = new XummSdk(
   // DO NOT include the API secret in browser code
 );
 
+// Export the SDK instance
+export { sdk as xummSdk };
+
 // Wallet providers
 const WALLET_PROVIDERS = {
   XRP: ['Xaman', 'GemWallet', 'Crossmark'],

@@ -1,5 +1,9 @@
-import { XummSdk } from 'xumm-sdk';
+// Remove this line:
+// import { XummSdk } from 'xumm-sdk';
+
+// Keep only:
 import { API_CONFIG } from '../config/api.js';
+import { xummSdk } from './walletService.js'; // Import the existing SDK
 
 import {
   getStakes,
@@ -37,17 +41,11 @@ function stringToHex(str) {
   }
 }
 
-// Create SDK instance only when needed, not at module level
+// Use the SDK from walletService.js instead of creating a new one
+// Replace the getXummSdk function with:
 const getXummSdk = () => {
-  if (!window.xummSdk) {
-    try {
-      window.xummSdk = new XummSdk(import.meta.env.VITE_XAMAN_API_KEY);
-    } catch (error) {
-      console.error('Error initializing Xumm SDK:', error);
-      window.xummSdk = null;
-    }
-  }
-  return window.xummSdk;
+  // Use the SDK instance from walletService.js
+  return window.xummSdk || null;
 };
 
 // Staking pools data (could be moved to an API call in the future)
