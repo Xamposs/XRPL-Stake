@@ -104,60 +104,95 @@ const getXRPBalance = async (address) => {
 };
 
 // Connect to Xaman wallet (simplified) - SINGLE VERSION ONLY
+// Connect to Xaman wallet using direct deep-link (no SDK required)
 const connectToXaman = async () => {
   try {
-    // Check if SDK is available
-    if (!sdk || !window.xummSdk) {
-      throw new Error('Xaman SDK not initialized. Please check your API key configuration.');
-    }
-
-    // Use the SDK to create a simple sign-in request
-    const request = {
-      txjson: {
-        TransactionType: 'SignIn'
-      }
+    // Create a simple sign-in request using Xaman's direct API
+    const signInRequest = {
+      TransactionType: 'SignIn'
     };
     
-    const payload = await sdk.payload.create(request);
+    // Use Xaman's direct API endpoint
+    const response = await fetch('https://xumm.app/api/v1/platform/payload', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': import.meta.env.VITE_XAMAN_API_KEY
+      },
+      body: JSON.stringify({
+        txjson: signInRequest,
+        options: {
+          submit: false,
+          multisign: false,
+          expire: 240
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Xaman API error: ${response.status}`);
+    }
+    
+    const payload = await response.json();
     
     if (payload && payload.next && payload.next.always) {
       // Open the sign-in URL
       window.open(payload.next.always, '_blank');
       
-      // Subscribe to payload updates
-      const subscription = await sdk.payload.subscribe(payload.uuid, (event) => {
-        if (event.signed === true) {
-          // Handle successful sign-in
-          console.log('User signed in:', event);
+      // Poll for completion (simplified approach)
+      const checkPayload = async () => {
+        try {
+          const statusResponse = await fetch(`https://xumm.app/api/v1/platform/payload/${payload.uuid}`, {
+            headers: {
+              'X-API-Key': import.meta.env.VITE_XAMAN_API_KEY
+            }
+          });
           
-          // Get user address from the signed transaction
-          const userAddress = event.txid ? event.account : null;
-          
-          if (userAddress) {
-            // Get account balance - NOW THIS WILL WORK
-            getXRPBalance(userAddress).then(balance => {
-              const walletData = {
-                address: userAddress,
-                balance: balance,
-                provider: 'Xaman',
-                lastConnected: new Date().toISOString()
-              };
+          if (statusResponse.ok) {
+            const status = await statusResponse.json();
+            
+            if (status.meta.signed === true) {
+              // Handle successful sign-in
+              console.log('User signed in:', status);
               
-              // Store in the connected wallet state
-              connectedWallets.xrp = walletData;
+              const userAddress = status.response.account;
               
-              // Store address in localStorage
-              localStorage.setItem('xrpWalletAddress', userAddress);
-              
-              return walletData;
-            });
+              if (userAddress) {
+                const balance = await getXRPBalance(userAddress);
+                const walletData = {
+                  address: userAddress,
+                  balance: balance,
+                  provider: 'Xaman',
+                  lastConnected: new Date().toISOString()
+                };
+                
+                connectedWallets.xrp = walletData;
+                localStorage.setItem('xrpWalletAddress', userAddress);
+                
+                return walletData;
+              }
+            } else if (status.meta.cancelled === true) {
+              throw new Error('User cancelled the sign-in request');
+            }
           }
+        } catch (error) {
+          console.error('Error checking payload status:', error);
         }
-      });
+      };
+      
+      // Check status every 2 seconds for up to 4 minutes
+      const pollInterval = setInterval(async () => {
+        await checkPayload();
+      }, 2000);
+      
+      // Stop polling after 4 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, 240000);
       
       return {
         uuid: payload.uuid,
-        subscription: subscription
+        pollInterval: pollInterval
       };
     } else {
       throw new Error('Failed to create Xaman payload');
